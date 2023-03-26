@@ -1,43 +1,69 @@
 const { response } = require('express');
+const bcryptjs = require('bcryptjs');
 
-const getUsers = (req, res = response) => {
-  const { q, name, apiKey } = req.query;
+const User = require('../models/user');
 
-  res.status(403).json({
-    msg: 'get api',
-    q,
-    name,
-    apiKey,
-  });
+const getUsers = async (req, res = response) => {
+  const { limit = 5, offset = 0 } = req.query;
+  const query = { status: true };
+
+  const [total, users] = await Promise.all([
+    User.count(query),
+    User.find(query).skip(offset).limit(Number(limit)),
+  ]);
+  res.status(403).json({ total, users });
 };
 
-const postUsers = (req, res) => {
-  const { name, age } = req.body;
+const postUsers = async (req, res) => {
+  const { name, email, password, role } = req.body;
+  const user = new User({ name, email, password, role });
 
-  res.status(201).json({
-    msg: 'post APi',
-    name,
-    age,
-  });
+  const salt = bcryptjs.genSaltSync();
+  user.password = bcryptjs.hashSync(password, salt);
+
+  await user.save();
+
+  res.status(201).json(user);
 };
 
-const putUsers = (req, res) => {
+const putUsers = async (req, res) => {
   const { id } = req.params;
-  res.json({
-    msg: 'put APi',
+  const { _id, password, google, email, ...rest } = req.body;
+
+  if (password) {
+    const salt = bcryptjs.genSaltSync();
+    rest.password = bcryptjs.hashSync(password, salt);
+  }
+  const user = await User.findByIdAndUpdate(id, rest, { new: true });
+
+  res.json(user);
+};
+
+const patchUsers = async (req, res) => {
+  const { id } = req.params;
+  const { password, email, name, role } = req.body;
+
+  const salt = bcryptjs.genSaltSync();
+  password = bcryptjs.hashSync(password, salt);
+
+  const user = await User.findByIdAndUpdate(
     id,
+    { password, email, name, role },
+    { new: true }
+  );
+
+  res.json({
+    user,
   });
 };
 
-const pathcUsers = (req, res) => {
-  res.json({
-    msg: 'patch APi',
-  });
-};
+const deleteUsers = async (req, res) => {
+  const { id } = req.params;
 
-const deleteUsers = (req, res) => {
+  const user = await User.findByIdAndUpdate(id, { status: false });
+
   res.json({
-    msg: 'delete APi',
+    user,
   });
 };
 
@@ -45,6 +71,6 @@ module.exports = {
   getUsers,
   postUsers,
   putUsers,
-  pathcUsers,
+  patchUsers,
   deleteUsers,
 };
